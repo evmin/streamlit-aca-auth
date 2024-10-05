@@ -1,0 +1,9 @@
+python-dotenv
+pyyaml
+requests
+asyncio
+pydantic==2.8.2
+pydantic-settings==2.4.0
+pydantic_core==2.20.1
+semantic-kernel==1.8.0
+streamlit==1.37.1
