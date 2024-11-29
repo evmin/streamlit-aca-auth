@@ -90,6 +90,10 @@ resource app 'Microsoft.App/containerApps@2023-04-01-preview' = {
             name: 'api-key'
             value: 'aaa'
         }
+        {
+          name: 'auth-tenant-ids'
+          value: subscription().tenantId
+        }
       ]
     }
     template: {
@@ -105,6 +109,10 @@ resource app 'Microsoft.App/containerApps@2023-04-01-preview' = {
             {
               name: 'AZURE_OPENAI_KEY' 
               secretRef: 'api-key'
+            }
+            {
+              name: 'AUTH_TENANT_IDS' 
+              secretRef: 'auth-tenant-ids'
             }
           ]
           resources: {

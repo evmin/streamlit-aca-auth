@@ -1,67 +1,39 @@
 import streamlit as st
-from lib import create_kernel_with_chat_completion, initialize_agents
-from lib import single_agent
-import asyncio
+import os
+import json
+import base64
+import re
 
-st.set_page_config(page_title="Multi agent post writer", layout="wide")
+AUTHORISED_TENANTS = os.getenv("AUTH_TENANT_IDS")
+# 'aa410fd2-904c-402e-a77c-1cf5e826ab63,b'
+authorised = False
 
-def run_async_task(async_func, *args):
-    loop = None
-    try:
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(async_func(*args))
-    except:
-        if loop is not None:
-            loop.close()
+st.set_page_config(page_title="Auth validation", layout="wide")
 
-def initialize_state():
-        st.session_state.kernel = create_kernel_with_chat_completion("default")
-        st.session_state.agents = initialize_agents(st.session_state.kernel)
-        st.session_state.topic = ""
+def extract_iss_claim(token):
+    obj = json.loads(base64.urlsafe_b64decode(token))
+    if 'claims' not in obj:
+        print("claims not found")
+        return None
+    for claim in obj['claims']:
+        if claim.get('typ') == 'iss':
+            return claim.get('val')  # Return the 'val' of the 'iss' claim
+    print("iss claim not found")    
+    return None
 
-def flush_state():
-        st.session_state.original_copy = ""
-        st.session_state.critic_copy = ""
+if 'X-Ms-Client-Principal' in st.context.headers:
+    url = extract_iss_claim(st.context.headers['X-Ms-Client-Principal'])
 
-if "kernel" not in st.session_state or "agents" not in st.session_state or "topic" not in st.session_state:
-    initialize_state()
+    if url is not None:
+        match = re.search(r"(?<=login\.microsoftonline\.com/)[a-f0-9\-]+", url)
+        authorised = match and match.group(0) in AUTHORISED_TENANTS
 
-PANEL_HEIGHT = 620
+# Authorization check at the beginning
+if not authorised:
+    st.error("Unauthorized", icon="🚫")
+    st.stop()  
 
-
-
-col_writer, col_review, col_panel = st.columns(3,gap="small",)
-
-with col_writer:
-    col_writer.markdown("##### Initial writer copy")
-    panel_writer = col_writer.container(border=True, height=PANEL_HEIGHT)
-
-with col_review:
-    st.markdown("##### Reviewed copy")
-    panel_review = col_review.container(border=True, height=PANEL_HEIGHT)
-
-with col_panel:
-    col_panel.markdown("##### Agentic (creative) debate")
-    panel_container = col_panel.container(border=True, height=PANEL_HEIGHT)
-
-
-
-async def process_chat(chat):
-    first_copy = True
-    async for content in chat.invoke():
-        if first_copy:
-            with panel_writer:
-                panel_writer.markdown(content.content)
-                st.session_state.original_copy = content.content
-            first_copy = False
-        with panel_container:
-            # if content.name == "WRITER":
-            #     avatar= ":material/edit_note:"
-            # else:
-            #     avatar= ":material/rate_review:"
-            # with st.chat_message("ai", avatar=avatar):
-            with st.chat_message("ai", avatar=":material/smart_toy:"):
-                st.markdown(f"**{content.name}:**  \n  {content.content}")
+st.session_state.topic = ""
 
 # # Accept user input
 prompt = st.chat_input("Please provide a topic for a blog post:")
@@ -77,30 +49,9 @@ with st.sidebar:
         
 # --- Reset state ---
 if buttn_click:
-    initialize_state()
     title.title("Topic:")
 
 # --- Process Prompt ---
 if prompt:
-    initialize_state()
     st.session_state.topic = prompt
     title.title(f"Topic: {st.session_state.topic}")
-
-    with st.spinner("Agents at work..."):
-        chat_reflection = asyncio.run(single_agent(prompt, st.session_state.agents))
-        run_async_task(process_chat, chat_reflection)
-
-    st.session_state.original_copy = chat_reflection.history[1]
-    if chat_reflection.is_complete:
-        st.session_state.critic_copy = chat_reflection.history[-2]
-    else:
-        st.session_state.critic_copy = chat_reflection.history[-1]
-
-    
-    with panel_review:
-        if "critic_copy" in st.session_state:
-            st.markdown(st.session_state.critic_copy)
-
-    with st.sidebar:
-        if "history" in chat_reflection:
-            st.markdown(f"# {len(chat_reflection.history)}")

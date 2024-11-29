@@ -1,7 +1,7 @@
 # V1
 FROM python:3.12-slim
 
-RUN apt-get update 
+LABEL version="0.1"
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
